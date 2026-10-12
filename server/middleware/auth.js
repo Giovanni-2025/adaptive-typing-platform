@@ -1,22 +1,19 @@
 const jwt = require("jsonwebtoken");
 
-// Checks that the request has a valid login token
 function verifyToken(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "No token provided" });
+  const token = req.cookies && req.cookies.token;
+  if (!token) {
+    return res.status(401).json({ error: "Not logged in" });
   }
 
   try {
-    const token = header.split(" ")[1];
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch (err) {
-    return res.status(401).json({ error: "Invalid or expired token" });
+    return res.status(401).json({ error: "Invalid or expired session" });
   }
 }
 
-// Allows only admins (use after verifyToken)
 function requireAdmin(req, res, next) {
   if (req.user.role !== "admin") {
     return res.status(403).json({ error: "Admins only" });
