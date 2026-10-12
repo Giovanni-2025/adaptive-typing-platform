@@ -23,5 +23,17 @@ app.get("/api/db-test", async (req, res) => {
 const authRoutes = require("./routes/auth");
 app.use("/api/auth", authRoutes);
 
+
+const { verifyToken, requireAdmin } = require("./middleware/auth");
+
+app.get("/api/me", verifyToken, (req, res) => {
+  res.json({ message: "You are logged in", user: req.user });
+});
+
+app.get("/api/admin/ping", verifyToken, requireAdmin, (req, res) => {
+  res.json({ message: "Welcome, admin" });
+});
+
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
