@@ -29,11 +29,14 @@ app.use("/api/auth", authRoutes);
 
 const { verifyToken, requireAdmin } = require("./middleware/auth");
 
-  
+
 
 app.get("/api/admin/ping", verifyToken, requireAdmin, (req, res) => {
   res.json({ message: "Welcome, admin" });
 });
+
+const sessionRoutes = require("./routes/sessions");
+app.use("/api/sessions", sessionRoutes);
 
 
 const PORT = process.env.PORT || 5000;
