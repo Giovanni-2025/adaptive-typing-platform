@@ -1,0 +1,41 @@
+# Development setup
+
+**Status: planned onboarding, not verified against the current code.** Do not run guessed commands or restructure the application to make this guide true during a documentation task.
+
+[Environment](environment.md) · [Architecture](architecture.md) · [Contributing](contributing.md)
+
+## Intended prerequisites
+
+Git, the team's pinned Node.js/npm versions, Docker with Compose for local PostgreSQL/Mailpit, and an editor. Version pins, supported operating-system instructions and service ports are TBD until the implementation setup is reviewed. LLM credentials should not be necessary for basic practice: fallback must work independently.
+
+## First implementation setup
+
+1. Inspect the actual package manifests and existing structure after implementation is authorised. Compare them with the target architecture; agree the smallest migration needed.
+2. Pin compatible tool/dependency versions and commit the package lockfile.
+3. Provide safe environment examples and copy them to the agreed ignored local environment files. Obtain secrets through the team's private channel.
+4. Start local database/email services, apply committed migrations and seed development content using verified scripts.
+5. Start the web/API processes; record actual URLs and ports.
+6. Verify registration/email, login, fallback practice, submission and saved results. Confirm the dedicated test database is separate.
+
+## Command register
+
+The following are desired script names, **not currently verified commands**. Replace or confirm them from the implementation and record evidence.
+
+| Purpose | Proposed command | Verified |
+| --- | --- | --- |
+| Install locked dependencies | `npm ci` after a valid lockfile exists | No |
+| Local database/email services | `npm run db:up` | No |
+| Apply development migrations | `npm run db:migrate` | No |
+| Seed development content | `npm run db:seed` | No |
+| Run applications | `npm run dev` | No |
+| Lint/type-check | `npm run lint`, `npm run typecheck` | No |
+| Tests/build | `npm test`, `npm run build` | No |
+| Content checks/simulation | `npm run content:validate`, `npm run simulate` | No |
+
+Record the OS, versions, working directory, command, expected result and last successful date when verification happens. Do not use database resets or `db push` against shared data. Migration creation and production migration application need separate documented procedures.
+
+## Troubleshooting and deployment handoff
+
+Check missing variables and occupied ports without printing secrets. For authentication failures, compare actual origins/cookies with the agreed auth configuration. For practice generation failures, check local fallback/content validation before blaming the LLM.
+
+Before deployment, add the verified host/release steps here: migration owner, health URLs, HTTPS/origins, secret provisioning, backup/restore evidence, job catch-up, rollback procedure and cold-start limits. These remain TBD; no deployment is implied by this guide.

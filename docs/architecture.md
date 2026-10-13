@@ -1,0 +1,367 @@
+# TypeFlow: Architecture and Project Structure
+
+Version 1.1 — 13 October 2026
+
+This is a proposed structure aligned with [the SRS](srs.md) and [handoff](context/handoff.md). It is not an inventory of the existing codebase, which was not inspected. Paths below are relative to the eventual application repository root; creating these documents does not scaffold the application. See the [documentation index](README.md) for the actual documentation layout.
+
+## 1. Repository layout
+
+```text
+typeflow/
+├── apps/
+│   ├── web/
+│   └── api/
+├── packages/
+│   └── shared/
+├── docs/
+│   ├── srs.md
+│   ├── context/                    # handoff and current-state notes
+│   ├── architecture.md
+│   ├── api-contract.md              # created during contract agreement
+│   ├── testing.md                   # verification and evaluation guide
+│   ├── content-guide.md
+│   ├── setup.md
+│   ├── environment.md
+│   ├── auth.md
+│   ├── security.md
+│   ├── contributing.md
+│   └── decisions/
+├── AGENTS.md                       # concise repository-wide agent guidance
+├── DESIGN.md                       # unapproved visual-design template
+├── .github/
+│   ├── workflows/ci.yml
+│   ├── pull_request_template.md
+│   └── CODEOWNERS
+├── docker-compose.yml              # PostgreSQL + Mailpit for development
+├── .env.example
+├── .gitignore
+├── .editorconfig
+├── .nvmrc
+├── .prettierrc
+├── eslint.config.js
+├── tsconfig.base.json
+├── package.json                    # npm workspaces and root scripts
+└── README.md
+```
+
+Root scripts should cover development, database startup/migrations/seeding, lint, type-check, tests, build, simulation and content validation. Do not create empty application files just to match this tree; add each module when its first behaviour is implemented. Documentation now exists for the planned workflows; its existence does not mean the corresponding application behaviour is implemented. Exact commands remain unverified in setup.md.
+
+## 2. Backend layout
+
+```text
+apps/api/
+├── prisma/
+│   ├── schema.prisma
+│   ├── migrations/
+│   ├── seed.ts
+│   └── content/
+│       ├── keygroups.json
+│       ├── wordlists/
+│       ├── themes.json
+│       └── blocked-words.txt
+├── src/
+│   ├── server.ts                   # startup and graceful shutdown
+│   ├── app.ts                      # Express application assembly
+│   ├── routes.ts                   # mounts /api/v1 modules
+│   ├── config/env.ts               # validated environment values
+│   ├── db/prisma.ts
+│   ├── middleware/
+│   │   ├── auth.ts                 # JWT, revocation and active account check
+│   │   ├── requireRole.ts
+│   │   ├── csrf.ts
+│   │   ├── validate.ts
+│   │   ├── rateLimit.ts
+│   │   ├── errorHandler.ts
+│   │   └── notFound.ts
+│   ├── utils/
+│   │   ├── AppError.ts
+│   │   ├── logger.ts
+│   │   ├── tokens.ts               # signed auth and hashed one-time tokens
+│   │   └── time.ts
+│   ├── modules/
+│   │   ├── auth/                   # register, verify, login, reset, revocation
+│   │   ├── users/                  # profile, settings, coordinated deletion
+│   │   ├── scoring/                # PURE
+│   │   │   ├── replay.ts
+│   │   │   ├── logValidator.ts
+│   │   │   ├── evidence.ts         # eligible key/pair samples
+│   │   │   ├── scoreSession.ts     # uses shared metric functions
+│   │   │   └── *.test.ts
+│   │   ├── adaptive/               # PURE; settings passed as arguments
+│   │   │   ├── defaults.ts
+│   │   │   ├── statsUpdate.ts
+│   │   │   ├── weakness.ts
+│   │   │   ├── focusSelection.ts
+│   │   │   ├── difficulty.ts
+│   │   │   ├── mastery.ts
+│   │   │   ├── spacedReview.ts
+│   │   │   ├── placement.ts
+│   │   │   ├── buildSpec.ts
+│   │   │   └── *.test.ts
+│   │   ├── typing/                 # ONE session lifecycle for all modes
+│   │   │   ├── routes.ts
+│   │   │   ├── controller.ts
+│   │   │   ├── startSession.ts
+│   │   │   ├── submitSession.ts
+│   │   │   ├── abandonSession.ts
+│   │   │   └── repository.ts
+│   │   ├── stats/                  # reads and transaction-scoped writes
+│   │   ├── path/                   # keyboard map and recommended activity
+│   │   ├── generation/
+│   │   │   ├── service.ts
+│   │   │   ├── feasibility.ts
+│   │   │   ├── validator.ts
+│   │   │   ├── fallbackGenerator.ts
+│   │   │   ├── cache.ts
+│   │   │   └── *.test.ts
+│   │   ├── gamification/           # pure reward rules + persistence helpers
+│   │   ├── certificates/           # eligibility, records, revoke, verify, PDF
+│   │   ├── forum/                  # threads, replies, accepted answer, reports
+│   │   ├── settings/               # validated immutable settings versions
+│   │   ├── analytics/              # defined aggregates and parameterised SQL
+│   │   └── admin/                  # protected management workflows/audit
+│   ├── integrations/
+│   │   ├── llm/                    # client, prompts, response schemas
+│   │   ├── mailer/                 # SMTP client and templates
+│   │   └── pdf/                    # certificate document rendering
+│   ├── jobs/
+│   │   ├── runner.ts               # scheduled execution and restart catch-up
+│   │   ├── pregenerateTexts.ts
+│   │   └── purgeKeystrokeLogs.ts
+│   └── scripts/
+│       ├── simulate/              # typists, policies, common assessment
+│       ├── generate-texts.ts
+│       └── validate-content.ts
+├── tests/
+│   ├── fixtures/
+│   ├── setup.ts                    # verifies dedicated typeflow_test database
+│   └── integration/
+├── package.json
+├── tsconfig.json
+└── vitest.config.ts
+```
+
+Feature folders may use routes, controller, service, repository and local schemas as needed. A controller translates HTTP; a service coordinates behaviour. Database access belongs in explicit repository/query functions where that makes the boundary useful. Do not add empty layers for a trivial operation.
+
+### Dependency rules
+
+1. Scoring/adaptive functions import only pure shared code and their own pure helpers.
+2. Integrations do not import feature modules. Feature services call integrations.
+3. Shared code cannot import either application, Prisma, Express, secrets or server-only integrations.
+4. The typing submission service coordinates authoritative results for placement, practice, reviews and tests. Separate routes must not create separate scoring implementations.
+5. Database helpers accept the current transaction client when participating in a submission.
+6. Runtime settings are loaded by services and passed into functions. Pure modules never query settings themselves.
+7. LLM, email and PDF calls never run inside a result-saving transaction.
+
+## 3. Frontend layout
+
+```text
+apps/web/
+├── public/
+│   └── favicon.svg
+├── src/
+│   ├── main.tsx
+│   ├── App.tsx
+│   ├── app/
+│   │   ├── router.tsx
+│   │   ├── providers.tsx
+│   │   ├── queryClient.ts
+│   │   └── ErrorBoundary.tsx
+│   ├── api/
+│   │   ├── client.ts               # credentials, base URL, safe 401 handling
+│   │   ├── auth.ts
+│   │   ├── users.ts
+│   │   ├── sessions.ts
+│   │   ├── path.ts
+│   │   ├── progress.ts
+│   │   ├── gamification.ts
+│   │   ├── certificates.ts
+│   │   ├── forum.ts
+│   │   └── admin.ts
+│   ├── context/
+│   │   ├── AuthContext.tsx
+│   │   ├── RewardsContext.tsx
+│   │   └── PreferencesContext.tsx
+│   ├── hooks/
+│   ├── components/
+│   │   ├── ui/
+│   │   ├── layout/                 # student/admin shells and navigation
+│   │   ├── RequireAuth.tsx
+│   │   ├── RequireRole.tsx
+│   │   ├── Loading.tsx
+│   │   ├── ErrorMessage.tsx
+│   │   ├── EmptyState.tsx
+│   │   └── ConfirmDialog.tsx
+│   ├── features/
+│   │   ├── auth/
+│   │   ├── placement/
+│   │   ├── dashboard/
+│   │   ├── keyboard-map/
+│   │   ├── typing/
+│   │   │   ├── pages/TypingSessionPage.tsx
+│   │   │   ├── components/         # display, input, keyboard, controls, stats
+│   │   │   ├── engine/
+│   │   │   │   ├── keystrokeRecorder.ts
+│   │   │   │   ├── typingReducer.ts
+│   │   │   │   ├── liveMetrics.ts  # calls shared formulas
+│   │   │   │   └── *.test.ts
+│   │   │   └── hooks/              # start, record, submit, recover result
+│   │   ├── result/
+│   │   ├── tests/                  # UI for timed/certified session modes
+│   │   ├── review/
+│   │   ├── progress/
+│   │   ├── gamification/
+│   │   ├── certificates/
+│   │   ├── forum/
+│   │   ├── profile/
+│   │   └── admin/
+│   ├── lib/
+│   │   ├── utils.ts
+│   │   └── queryKeys.ts
+│   ├── mocks/                      # schema-checked development fixtures
+│   ├── styles/index.css
+│   └── types/                      # browser-only types
+├── tests/e2e/
+├── index.html
+├── vite.config.ts
+├── tsconfig.json
+├── components.json
+├── .env.example
+└── package.json
+```
+
+Page → feature hook → API function → shared HTTP client. Components render state; API files only send requests and handle transport shapes. TanStack Query owns remote data; Context handles the few cross-page UI concerns. API authentication/ownership checks remain mandatory even when frontend route guards exist.
+
+The recorder emits ordered monotonic events. The reducer replays allowed end-of-buffer operations and mode transitions. Live metrics use shared formulas and are labelled provisional until submission succeeds. The frontend must retain the same submission payload during a network retry, and must not replay reward toasts as new awards when recovering an already-saved result.
+
+Do not let polling or dashboard rendering interfere with typing. Large-text and reduced-pressure settings affect presentation, not official elapsed time. Defer optional sounds until required behaviour is working.
+
+## 4. Shared package
+
+```text
+packages/shared/
+├── src/
+│   ├── index.ts
+│   ├── enums.ts                    # Role, SessionMode, status, source
+│   ├── auth.ts
+│   ├── user.ts
+│   ├── keystroke.ts                # discriminated event schemas
+│   ├── spec.ts
+│   ├── session.ts                  # assignment, submission, official result
+│   ├── modeRules.ts                # common rule shapes, no database reads
+│   ├── settings.ts                 # versioned configuration schemas
+│   ├── metrics.ts                  # one implementation of four formulas
+│   ├── path.ts
+│   ├── stats.ts
+│   ├── gamification.ts
+│   ├── certificates.ts
+│   ├── forum.ts
+│   ├── admin.ts
+│   └── errors.ts
+├── package.json
+└── tsconfig.json
+```
+
+Use Zod schemas with inferred TypeScript types. Separate public DTOs from database records; never export token hashes, internal moderation data or private profile fields by accident. Sharing formulas does not make a client score authoritative: the server derives all formula inputs independently.
+
+## 5. Data model and persistence invariants
+
+The exact Prisma schema is a phase-zero deliverable. Expected concepts:
+
+| Area | Records and responsibilities |
+| --- | --- |
+| Accounts | User, AuthSession/revocation state, EmailToken |
+| Curriculum | KeyGroup and explicit ordered prerequisites |
+| Learning | KeyStat, PairStat, AdaptiveEvent |
+| Sessions | TypingSession, KeystrokeLog, PracticeText |
+| Generation | GenerationAttempt, content/validation version |
+| Rewards | XpEvent, DailyActivity, Badge, UserBadge |
+| Certificates | Certificate with issued/revoked status and captured policy |
+| Content | Theme, WordList, blocked-content configuration |
+| Forum | ForumThread, ForumPost, ForumReport |
+| Administration | AdminAuditLog, immutable SettingVersion |
+| Operations | JobRun/checkpoint state where needed for catch-up |
+
+Key constraints: one official result per session, one key/pair statistic per user and item, unique badge awards, deduplicated reward events, unique certificate codes and one certificate per qualifying session. Store accepted payload hashes separately from expiring raw logs. Session status distinguishes created, completed, abandoned and expired.
+
+Completed results and settings versions are immutable during normal operation. Privacy deletion and retention remain allowed; “append-only” is not an exception to those requirements. Store the text actually assigned, not just a mutable content reference. Keep referenced settings versions available for retained results.
+
+Protect updates from separate simultaneous sessions for the same student. Choose a database-backed per-user lock or optimistic version check with bounded retries during implementation. Do not rely on a process-local mutex, which fails across multiple server processes. Re-read current learning state under the chosen concurrency protection before applying the update.
+
+## 6. Main flows
+
+### Start a session
+
+1. Authenticate, validate requested mode/options and check rate/attempt limits.
+2. Read current learning state and active settings; derive a feasible spec.
+3. Obtain validated cached, generated or fallback text outside a database transaction.
+4. Persist an owned assignment with the exact text, captured rules/versions and expiry.
+5. Return the assignment. The server controls certified-test text; the client cannot substitute it.
+
+### Submit a session
+
+1. Authenticate, validate shape/size and load the owned assignment.
+2. Canonicalise and hash the submission. If already completed, return its result for an identical hash or reject a conflict.
+3. Replay and validate against the captured assignment; calculate official metrics and eligible evidence.
+4. Begin a transaction, acquire concurrency protection and recheck submission status.
+5. Load current student statistics; run applicable pure adaptive/reward functions using the captured rules.
+6. Save the result, hash, expiring raw log, applicable statistics, decision, rewards and certificate record once.
+7. Commit and return the saved result, reward events and next recommendation.
+8. Render a requested certificate PDF outside the transaction. PDF failure must not erase a completed test or cause duplicate issuance.
+
+Any recommendation requiring new text is fulfilled by a later start request. Do not keep a submit request open while waiting for the LLM.
+
+### Maintenance
+
+Use database records/checkpoints to find overdue purge and pre-generation work at startup and scheduled intervals. A scheduling library may wake the runner, but in-process scheduling alone is not the guarantee. Use locking or claims to avoid duplicate work across instances. Purging and catch-up must be retry-safe. Review dates can be computed when reading the path; email reminders are not required.
+
+## 7. API groups
+
+All application routes use `/api/v1`. Define complete request/response schemas and error codes in the later API contract; the examples below are proposed names.
+
+| Group | Examples |
+| --- | --- |
+| `/auth` | register, verify-email, resend-verification, login, logout, me, forgot-password, reset-password |
+| `/users/me` | profile/preferences update and account deletion |
+| `/sessions` | start with mode, submit, abandon, owned result, history |
+| `/path` | keyboard map, next activity, due reviews |
+| `/progress` | comparable trends and key heat map |
+| `/gamification` | XP, level, streak, goals and badges |
+| `/certificates` | owned list/PDF; public verification by code |
+| `/forum` | threads, replies, accept, reports |
+| `/admin` | users, content, settings, analytics, moderation, certificate revocation, audit |
+
+Placement, practice and tests use the same session lifecycle with distinct mode rules. Avoid duplicate `/placement/submit` and `/tests/submit` implementations. If separate convenience routes are introduced, delegate them to the same service. There is no Google-auth route in the baseline.
+
+Use `/health/live` for process liveness and `/health/ready` for readiness including database connectivity; a database outage should not imply the process itself has stopped running.
+
+## 8. Environment, development and delivery
+
+Development Docker runs PostgreSQL and Mailpit with a named database volume and health checks. The API and web app run locally. Select and pin supported versions when setup is implemented. A production Dockerfile is optional depending on the host; it is not required to develop the application.
+
+Example API configuration groups: environment/port, database URL, allowed client origins, JWT signing/session lifetimes, cookie/CSRF settings, SMTP credentials/from address, LLM base URL/key/model/timeout and job/retention settings. Use safe sample values in `.env.example`; validate required values at startup. Shared business settings belong in validated versioned settings, not dozens of untracked environment overrides.
+
+Web environment: `VITE_API_URL` and an explicitly development-only mock toggle if needed. Values prefixed `VITE_` are public. There are no Google client-ID variables in this baseline. Real backend authentication must never accept a development fake-user header in production.
+
+CI: reproducible install → lint/type-check → dedicated PostgreSQL test service → migrations → relevant unit/integration checks and content validation → build. Add browser smoke checks for the typing flow. Test setup must verify the dedicated test database before destructive resets; never reuse a development or production connection. Protect `main` with passing checks and review.
+
+Deployment: run committed migrations in a controlled release step, configure HTTPS/cookies/origins, verify email and fallback behaviour, and document rollback/recovery. Back up the database and verify a restore. Show measured free-host cold-start and capacity limits rather than assuming the performance targets were met.
+
+## 9. Verification priorities
+
+- Shared metrics: corrections, spaces, unfinished timed text, pauses and zero denominators.
+- Replay: sequence, backspace boundaries, repeat handling, deadline and mode restrictions.
+- Adaptation: accuracy gate, unknown evidence, multi-session mastery, target changes, review failure and preserved unlocks.
+- Generation: tiny alphabets, impossible pairs, blocked content, versioned cache and validated fallback.
+- Persistence: lost response retry, conflicting retry, concurrent sessions, rollback and reward uniqueness.
+- Accounts: ownership, deactivation/reset revocation, CSRF and deletion through linked artifacts.
+- Certificates: captured eligibility policy, unproctored label, safe public fields, revoke and PDF retry.
+- Evaluation: equal budgets, multiple seeds and common held-out assessment.
+
+Tests should establish behaviour rather than mirror file structure. Record requirement coverage and evidence using [testing.md](testing.md).
+
+## 10. What may be deferred
+
+Defer optional sound effects, reminder emails, charts beyond the required evaluation table and a production Dockerfile when unnecessary. Keep the required accessibility options, public verification, audit records and core admin capabilities. Google sign-in, leaderboards and coaching notes are already outside scope. Dropping forum, certificates or required administration needs an explicit SRS change.
+
+This structure intentionally avoids a separate scoring implementation per mode, LLM calls inside transactions, runtime settings hidden in pure modules and a scheduler that silently loses work while the host sleeps.
